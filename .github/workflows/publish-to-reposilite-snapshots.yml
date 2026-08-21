@@ -3,10 +3,6 @@ name: Publish to Reposilite Snapshots
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Snapshot version to publish (e.g. 10.19.0-agp9-local)'
-        required: true
-        type: string
       perform-a-gradle-clean:
         description: "Perform a Gradle clean"
         type: boolean
@@ -25,9 +21,8 @@ jobs:
           token: ${{ github.token }}
 
       - name: Normalize version (append -SNAPSHOT if missing)
-        env:
-          VERSION: ${{ inputs.version }}
         run: |
+          VERSION=$(cat version.txt)
           if [[ "$VERSION" != *-SNAPSHOT ]]; then
             VERSION="$VERSION-SNAPSHOT"
           fi
