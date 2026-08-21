@@ -4,13 +4,12 @@ buildscript {
     ext.kotlin_version = properties.get('KOTLIN')
     repositories {
         google()
-        jcenter()
+        mavenCentral()
         maven {
             url "https://plugins.gradle.org/m2/"
         }
     }
     dependencies {
-        classpath "io.github.gradle-nexus:publish-plugin:${properties.get("GRADLE_NEXUS_PLUGIN")}"
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
@@ -27,13 +26,10 @@ properties.load(new FileInputStream("${projectDir}/../dependencies.list"))
 
 def coreVersion = properties.getProperty('REALM_CORE')
 
-sourceCompatibility = JavaVersion.VERSION_11
-targetCompatibility = JavaVersion.VERSION_11
-
 repositories {
     mavenLocal()
     google()
-    jcenter()
+    mavenCentral()
 }
 
 configurations {
@@ -76,11 +72,10 @@ task generateVersionClass(type: Copy) {
 compileKotlin.dependsOn generateVersionClass
 
 apply from: "${rootDir}/../mavencentral-publications.gradle"
-apply from: "${rootDir}/../mavencentral-publish.gradle"
 
 publishing {
     publications {
-        realmPublication(MavenPublication) {
+        realm(MavenPublication) {
             groupId 'io.realm'
             artifactId = 'realm-transformer'
             from components.java
@@ -96,13 +91,21 @@ publishing {
 java {
     withSourcesJar()
     withJavadocJar()
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.named('sourcesJar') {
+    dependsOn generateVersionClass
 }
 
 compileKotlin {
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11
+        jvmTarget = JavaVersion.VERSION_17
         freeCompilerArgs = ["-Xinline-classes", "-Xjvm-default=all-compatibility"]
     }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    compilerOptions.jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
 }

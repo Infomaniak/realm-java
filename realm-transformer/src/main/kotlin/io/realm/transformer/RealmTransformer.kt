@@ -18,7 +18,6 @@ package io.realm.transformer
 
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.api.variant.UnitTest
-import com.android.build.gradle.internal.publishing.AndroidArtifacts
 import io.realm.analytics.RealmAnalytics
 import io.realm.transformer.build.BuildTemplate
 import io.realm.transformer.build.FullBuild
@@ -26,7 +25,6 @@ import io.realm.transformer.build.IncrementalBuild
 import io.realm.transformer.ext.areIncrementalBuildsDisabled
 import io.realm.transformer.ext.getAgpVersion
 import io.realm.transformer.ext.getAppId
-import io.realm.transformer.ext.getBootClasspath
 import io.realm.transformer.ext.getMinSdk
 import io.realm.transformer.ext.getTargetSdk
 import io.realm.transformer.ext.targetType
@@ -103,13 +101,16 @@ fun registerRealmTransformerTask(project: Project) {
                         RealmTransformerTask::class.java
                     ) { task ->
                         task.apply {
-                            referencedInputs.setFrom(component.runtimeConfiguration.incoming.artifactView { c ->
-                                c.attributes.attribute(
-                                    AndroidArtifacts.ARTIFACT_TYPE,
-                                    AndroidArtifacts.ArtifactType.CLASSES_JAR.type
-                                )
-                            }.files)
-                            bootClasspath.setFrom(project.getBootClasspath())
+                            // Use the specific component's own compile classpath (not the
+                            // outer variant's), so that e.g. an androidTest component sees
+                            // the tested main variant's compiled classes on its classpath.
+                            // Falls back to the variant's classpath if the component itself
+                            // doesn't expose one.
+                            referencedInputs.setFrom(
+                                (component as? com.android.build.api.variant.Component)?.compileClasspath
+                                    ?: variant.compileClasspath
+                            )
+                            bootClasspath.setFrom(androidComponents.sdkComponents.bootClasspath)
                             offline.set(project.gradle.startParameter.isOffline)
                             targetType.set(project.targetType())
                             usesKotlin.set(project.usesKotlin())
@@ -252,7 +253,7 @@ abstract class RealmTransformerTask : DefaultTask() {
         val jarFileOutput: FileSystem = output.get().let { jarFile ->
             // Workaround to create the Jar if does not exist, as FileSystems fails to do so.
             touchJarFile(jarFile)
-            FileSystems.newFileSystem(output.get().asFile.toPath(), null)
+            FileSystems.newFileSystem(output.get().asFile.toPath(), emptyMap<String, Any>())
         }
 
         val build: BuildTemplate =
@@ -302,4 +303,3 @@ abstract class RealmTransformerTask : DefaultTask() {
         exitTransform()
     }
 }
-

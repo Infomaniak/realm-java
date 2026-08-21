@@ -220,7 +220,7 @@ class Backlink(private val clazz: ClassMetaData, private val backlinkField: Vari
             return false
         }
 
-        val fieldType = QualifiedClassName(field.asType().toString())
+        val fieldType = QualifiedClassName(Utils.stripTypeUseAnnotations(field.asType().toString()))
         if (!(targetClass == fieldType || targetClass == Utils.getRealmListType(field))) {
             Utils.error(String.format(Locale.US,
                     "Field \"%s.%s\", the target of the @LinkedObjects annotation on field \"%s.%s\", has type \"%s\" instead of \"%3\$s\".",

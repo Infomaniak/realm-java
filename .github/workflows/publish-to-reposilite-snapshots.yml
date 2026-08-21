@@ -1,0 +1,72 @@
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+name: Publish to Reposilite Snapshots
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Snapshot version to publish (e.g. 10.19.0-agp9-local)'
+        required: true
+        type: string
+      perform-a-gradle-clean:
+        description: "Perform a Gradle clean"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: [ self-hosted, Android ]
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4.2.2
+        with:
+          token: ${{ github.token }}
+
+      - name: Normalize version (append -SNAPSHOT if missing)
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$VERSION" != *-SNAPSHOT ]]; then
+            VERSION="$VERSION-SNAPSHOT"
+          fi
+          echo "SNAPSHOT_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Set the version (version.txt drives every publishable module's version)
+        run: echo -n "${{ env.SNAPSHOT_VERSION }}" > version.txt
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Perform a Gradle clean, as requested
+        if: ${{ github.event.inputs.perform-a-gradle-clean == 'true' }}
+        run: ./gradlew clean
+
+      - name: Publish the snapshot (Realm library, Gradle plugin and their transformers)
+        run: ./gradlew publishRealmJavaToReposilite
+
+      - name: Notify KChat
+        if: ${{ env.KCHAT_WEBHOOK_URL != '' }}
+        env:
+          KCHAT_WEBHOOK_URL: ${{ secrets.KCHAT_WEBHOOK_URL }}
+        run: |
+          TEXT=$(printf ':android: *realm-java (AGP 9 fork) snapshot %s* is now available on Reposilite Snapshots!\n:package: Available artifacts:\n```\nio.realm:realm-android-library:%s\nio.realm:realm-android-kotlin-extensions:%s\nio.realm:realm-gradle-plugin:%s\n```\n:link: https://maven.infomaniak.app/#/snapshots/io/realm' \
+            "${{ env.SNAPSHOT_VERSION }}" "${{ env.SNAPSHOT_VERSION }}" "${{ env.SNAPSHOT_VERSION }}" "${{ env.SNAPSHOT_VERSION }}")
+          curl -s -X POST "$KCHAT_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg text "$TEXT" '{text: $text}')"
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx5g -Dfile.encoding=UTF-8"
+  reposiliteUsername: ${{ secrets.REPOSILITE_USERNAME }}
+  reposilitePassword: ${{ secrets.REPOSILITE_PASSWORD }}

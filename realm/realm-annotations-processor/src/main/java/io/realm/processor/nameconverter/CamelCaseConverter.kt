@@ -27,7 +27,7 @@ class CamelCaseConverter : NameConverter {
         val output = StringBuilder()
         var firstWordEmitted = false
         for (i in words.indices) {
-            val word = words[i].toLowerCase()
+            val word = words[i].lowercase()
             if (firstWordEmitted) {
                 val codepoint = word.codePointAt(0)
                 output.appendCodePoint(Character.toUpperCase(codepoint))

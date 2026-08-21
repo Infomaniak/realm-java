@@ -571,7 +571,7 @@ class ClassMetaData(env: ProcessingEnvironment, typeMirrors: TypeMirrors, privat
         for (field in fields) {
             if (Utils.isRealmModel(field)) {
                 // Check that the referenced type is a concrete class and not an interface
-                val typeElement = elements.getTypeElement(field.asType().toString())
+                val typeElement = elements.getTypeElement(Utils.stripTypeUseAnnotations(field.asType().toString()))
                 if (typeElement.superclass.kind == TypeKind.NONE) {
                     Utils.error(
                             ("Only concrete Realm classes can be referenced from model classes. " + "Neither interfaces nor abstract classes are allowed."),
@@ -830,7 +830,7 @@ class ClassMetaData(env: ProcessingEnvironment, typeMirrors: TypeMirrors, privat
         if (Utils.isMutableRealmInteger(fieldElement) || Utils.isRealmAny(fieldElement)) {
             indexable = true
         } else {
-            when (Constants.JAVA_TO_REALM_TYPES[fieldElement.asType().toString()]) {
+            when (Constants.JAVA_TO_REALM_TYPES[Utils.stripTypeUseAnnotations(fieldElement.asType().toString())]) {
                 Constants.RealmFieldType.STRING,
                 Constants.RealmFieldType.DATE,
                 Constants.RealmFieldType.INTEGER,

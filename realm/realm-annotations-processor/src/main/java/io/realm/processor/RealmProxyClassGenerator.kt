@@ -247,7 +247,7 @@ class RealmProxyClassGenerator(private val processingEnvironment: ProcessingEnvi
     private fun emitPersistedFieldAccessors(writer: JavaWriter) {
         for (field in metadata.fields) {
             val fieldName = field.simpleName.toString()
-            val fieldTypeCanonicalName = field.asType().toString()
+            val fieldTypeCanonicalName = Utils.stripTypeUseAnnotations(field.asType().toString())
             when {
                 Constants.JAVA_TO_REALM_TYPES.containsKey(fieldTypeCanonicalName) -> emitPrimitiveType(writer, field, fieldName, fieldTypeCanonicalName)
                 Utils.isMutableRealmInteger(field) -> emitMutableRealmInteger(writer, field, fieldName, fieldTypeCanonicalName)
@@ -1439,7 +1439,7 @@ class RealmProxyClassGenerator(private val processingEnvironment: ProcessingEnvi
             addPrimaryKeyCheckIfNeeded(metadata, true, writer)
             for (field in metadata.fields) {
                 val fieldName = field.simpleName.toString()
-                val fieldType = QualifiedClassName(field.asType().toString())
+                val fieldType = QualifiedClassName(Utils.stripTypeUseAnnotations(field.asType().toString()))
                 val getter = metadata.getInternalGetter(fieldName)
 
                 when {
@@ -1732,7 +1732,7 @@ class RealmProxyClassGenerator(private val processingEnvironment: ProcessingEnvi
             addPrimaryKeyCheckIfNeeded(metadata, false, writer)
             for (field in metadata.fields) {
                 val fieldName = field.simpleName.toString()
-                val fieldType = QualifiedClassName(field.asType().toString())
+                val fieldType = QualifiedClassName(Utils.stripTypeUseAnnotations(field.asType().toString()))
                 val getter = metadata.getInternalGetter(fieldName)
 
                 when {
@@ -3095,7 +3095,7 @@ class RealmProxyClassGenerator(private val processingEnvironment: ProcessingEnvi
                 emitStatement("final %1\$s objProxy = (%1\$s) obj", interfaceName)
                 for (field in metadata.fields) {
                     val fieldName = field.simpleName.toString()
-                    val qualifiedFieldType = QualifiedClassName(field.asType().toString())
+                    val qualifiedFieldType = QualifiedClassName(Utils.stripTypeUseAnnotations(field.asType().toString()))
                     if (metadata.isPrimaryKey(field)) {
                         continue  // Primary key has already been set when adding new row or finding the existing row.
                     }
@@ -3203,7 +3203,7 @@ class RealmProxyClassGenerator(private val processingEnvironment: ProcessingEnvi
                 val fields = metadata.fields
                 for (field in fields) {
                     val fieldName = field.simpleName.toString()
-                    val fieldType = QualifiedClassName(field.asType().toString())
+                    val fieldType = QualifiedClassName(Utils.stripTypeUseAnnotations(field.asType().toString()))
                     nextControlFlow("else if (name.equals(\"%s\"))", fieldName)
 
                     when {
@@ -3323,7 +3323,7 @@ class RealmProxyClassGenerator(private val processingEnvironment: ProcessingEnvi
     }
 
     private fun getRealmType(field: VariableElement): Constants.RealmFieldType {
-        val fieldTypeCanonicalName: String = field.asType().toString()
+        val fieldTypeCanonicalName: String = Utils.stripTypeUseAnnotations(field.asType().toString())
         val type: Constants.RealmFieldType? = Constants.JAVA_TO_REALM_TYPES[fieldTypeCanonicalName]
         if (type != null) {
             return type
@@ -3361,7 +3361,7 @@ class RealmProxyClassGenerator(private val processingEnvironment: ProcessingEnvi
     private fun getRealmTypeChecked(field: VariableElement): Constants.RealmFieldType {
         val type = getRealmType(field)
         if (type === Constants.RealmFieldType.NOTYPE) {
-            throw IllegalStateException("Unsupported type " + field.asType().toString())
+            throw IllegalStateException("Unsupported type " + Utils.stripTypeUseAnnotations(field.asType().toString()))
         }
         return type
     }

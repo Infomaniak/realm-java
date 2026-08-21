@@ -26,7 +26,7 @@ class PascalCaseConverter : NameConverter {
         val words = tokenizer.split(name)
         val output = StringBuilder()
         for (i in words.indices) {
-            val word = words[i].toLowerCase()
+            val word = words[i].lowercase()
             val codepoint = word.codePointAt(0)
             output.appendCodePoint(Character.toUpperCase(codepoint))
             output.append(word.substring(Character.charCount(codepoint)))

@@ -1,6 +1,7 @@
+import com.android.build.api.artifact.SingleArtifact
+
 apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
-apply plugin: 'kotlin-kapt'
+apply plugin: 'com.android.legacy-kapt'
 apply plugin: 'de.undercouch.download'
 apply plugin: 'org.jetbrains.dokka'
 
@@ -15,17 +16,24 @@ def properties = new Properties()
 properties.load(new FileInputStream("${projectDir}/../../dependencies.list"))
 
 android {
-    compileSdkVersion rootProject.compileSdkVersion
+    namespace 'io.realm.kotlin'
+    compileSdk rootProject.compileSdkVersion
     buildToolsVersion rootProject.buildToolsVersion
     defaultConfig {
-        minSdkVersion rootProject.minSdkVersion
-        targetSdkVersion rootProject.compileSdkVersion
+        minSdk rootProject.minSdkVersion
+        targetSdk rootProject.targetSdkVersion
         versionName version
         multiDexEnabled true
-        project.archivesBaseName = "realm-kotlin-extensions"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
+
+    // AGP 9 disables this generated public compatibility class unless it is
+    // explicitly requested. Realm 10.19.0 publishes io.realm.kotlin.BuildConfig.
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
         debug {
             // https://youtrack.jetbrains.com/issue/KT-11333
@@ -50,25 +58,28 @@ android {
     }
 
     sourceSets {
-        main.java.srcDirs += 'src/main/kotlin'
-        androidTest.java.srcDirs += [
+        main.kotlin.srcDirs += 'src/main/kotlin'
+        androidTest.kotlin.srcDirs += [
                 'src/androidTest/kotlin',
-                '../realm-library/src/testUtils/java',
                 '../realm-library/src/testUtils/kotlin'
         ]
-        objectServer.java.srcDirs += 'src/objectServer/kotlin'
-        androidTestObjectServer.java.srcDirs += [
+        androidTest.java.srcDirs += ['../realm-library/src/testUtils/java']
+        objectServer.kotlin.srcDirs += 'src/objectServer/kotlin'
+        androidTestObjectServer.kotlin.srcDirs += [
                 'src/androidTestObjectServer/kotlin',
-                '../realm-library/src/testUtils/java',
                 '../realm-library/src/testUtils/kotlin',
-                '../realm-library/src/syncTestUtils/java',
                 '../realm-library/src/syncTestUtils/kotlin',
+        ]
+        androidTestObjectServer.java.srcDirs += [
+                '../realm-library/src/testUtils/java',
+                '../realm-library/src/syncTestUtils/java',
         ]
     }
 
-    packagingOptions {
-         exclude "META-INF/AL2.0"
-         exclude "META-INF/LGPL2.1"
+    packaging {
+        resources {
+            excludes += ["META-INF/AL2.0", "META-INF/LGPL2.1"]
+        }
     }
 
     // Required from Kotlin 1.1.2
@@ -77,9 +88,23 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8
+}
+
+// Keep ObjectServer source files, but exclude their unsupported variants from
+// the local-DB release task and publication graph.
+def baseReleaseAar = objects.fileProperty()
+
+androidComponents {
+    beforeVariants(selector().withFlavor('api', 'objectServer')) { variantBuilder ->
+        variantBuilder.enable = false
     }
+    onVariants(selector().withFlavor('api', 'base').withBuildType('release')) { variant ->
+        baseReleaseAar.set(variant.artifacts.get(SingleArtifact.AAR.INSTANCE))
+    }
+}
+
+base {
+    archivesName = "realm-kotlin-extensions"
 }
 
 dependencies {
@@ -92,8 +117,8 @@ dependencies {
     androidTestImplementation "org.jetbrains.kotlin:kotlin-test:$kotlin_version"
 
     androidTestImplementation 'junit:junit:4.12'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.1'
-    androidTestImplementation 'androidx.test:rules:1.2.0'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test:rules:1.6.1'
     androidTestImplementation "org.mongodb:bson:${properties.getProperty('BSON_DEPENDENCY')}"
     androidTestImplementation 'com.google.code.findbugs:jsr305:3.0.2'
     kaptAndroidTest project(':realm-annotations-processor')
@@ -107,16 +132,16 @@ repositories {
 }
 
 // enable @ParametersAreNonnullByDefault annotation. See https://blog.jetbrains.com/kotlin/2017/09/kotlin-1-1-50-is-out/
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
-    kotlinOptions {
-        freeCompilerArgs = ["-Xjsr305=strict"]
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add('-Xjsr305=strict')
     }
 }
 
 task sourcesJar(type: Jar) {
-    from android.sourceSets.objectServer.java.srcDirs
     from android.sourceSets.main.java.srcDirs
-    classifier = 'sources'
+    from android.sourceSets.main.kotlin.srcDirs
+    archiveClassifier.set('sources')
 }
 
 tasks.dokkaHtml.configure {
@@ -124,7 +149,7 @@ tasks.dokkaHtml.configure {
 }
 
 task javadocJar(type: Jar, dependsOn: dokkaHtml) {
-    classifier = 'javadoc'
+    archiveClassifier.set('javadoc')
     from "$buildDir/dokka"
 }
 
@@ -132,13 +157,11 @@ apply from: "${rootDir}/../mavencentral-publications.gradle"
 
 publishing {
     publications {
-        basePublication(MavenPublication) {
+        realm(MavenPublication) {
             groupId 'io.realm'
             artifactId 'realm-android-kotlin-extensions'
             version project.version
-            artifact (file("${rootDir}/kotlin-extensions/build/outputs/aar/realm-kotlin-extensions-base-release.aar")) {
-                builtBy assemble
-            }
+            artifact(baseReleaseAar)
             artifact sourcesJar
             artifact javadocJar
             populatePom(
@@ -146,23 +169,6 @@ publishing {
                     'realm-android-kotlin-extensions',
                     'Kotlin specific APIs and extension functions for Realm for Android',
                     createPomDependencies(["baseImplementation", "implementation", "baseApi", "api"])
-            )
-        }
-
-        objectServerPublication(MavenPublication) {
-            groupId 'io.realm'
-            artifactId 'realm-android-kotlin-extensions-object-server'
-            version project.version
-            artifact (file("${rootDir}/kotlin-extensions/build/outputs/aar/realm-kotlin-extensions-objectServer-release.aar")) {
-                builtBy assemble
-            }
-            artifact sourcesJar
-            artifact javadocJar
-            populatePom(
-                    it,
-                    'realm-android-kotlin-extensions-object-server',
-                    'Kotlin specific APIs and extension functions for Realm for Android',
-                    createPomDependencies(["objectServerImplementation", "implementation", "objectServerApi", "api"])
             )
         }
     }
@@ -173,7 +179,8 @@ artifacts {
     archives sourcesJar
 }
 
-publishToMavenLocal.dependsOn assemble
 
+// Consumer apps get the accessor transformer applied via the Realm Gradle plugin.
+// But this module's own androidTest APK uses Realm on itself (its test entities
+// need accessor bytecode generated too), so it must be registered here as well.
 io.realm.transformer.RealmTransformerKt.registerRealmTransformerTask(project)
-

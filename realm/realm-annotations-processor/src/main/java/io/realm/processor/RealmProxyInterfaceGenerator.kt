@@ -49,7 +49,7 @@ class RealmProxyInterfaceGenerator(private val processingEnvironment: Processing
                 }
                 // The field is neither static nor ignored
                 val fieldName = field.simpleName.toString()
-                val fieldTypeCanonicalName = field.asType().toString()
+                val fieldTypeCanonicalName = Utils.stripTypeUseAnnotations(field.asType().toString())
                 beginMethod(fieldTypeCanonicalName, metaData.getInternalGetter(fieldName), EnumSet.of(Modifier.PUBLIC))
                 endMethod()
 
