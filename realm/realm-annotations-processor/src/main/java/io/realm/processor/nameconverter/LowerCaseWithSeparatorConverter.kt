@@ -26,7 +26,7 @@ class LowerCaseWithSeparatorConverter(private val separator: Char) : NameConvert
         val words = tokenizer.split(name)
         val output = StringBuilder()
         for (i in words.indices) {
-            val word = words[i].toLowerCase()
+            val word = words[i].lowercase()
             output.append(word)
             if (i < words.size - 1) {
                 output.append(separator)

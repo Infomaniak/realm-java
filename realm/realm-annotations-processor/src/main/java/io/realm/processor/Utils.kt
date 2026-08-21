@@ -471,7 +471,18 @@ object Utils {
      * @return the qualified type name for a field.
      */
     fun getFieldTypeQualifiedName(field: VariableElement): QualifiedClassName {
-        return QualifiedClassName(field.asType().toString())
+        return QualifiedClassName(stripTypeUseAnnotations(field.asType().toString()))
+    }
+
+    /**
+     * Type-use annotations (e.g. Kotlin's `@org.jetbrains.annotations.Nullable`/`@NotNull` on
+     * platform types such as `byte[]`) are included by newer javac/kapt versions when calling
+     * [TypeMirror.toString]. Since Realm's annotation processor uses this string as a lookup key
+     * (see [Constants.JAVA_TO_REALM_TYPES]) and to build fully qualified class names, they must
+     * be stripped so the resulting type name matches the plain Java type (e.g. `byte[]`).
+     */
+    fun stripTypeUseAnnotations(typeName: String): String {
+        return typeName.replace(Regex("@[\\w.]+(\\([^)]*\\))?\\s*"), "")
     }
 
     /**

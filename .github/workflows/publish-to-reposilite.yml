@@ -1,0 +1,88 @@
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+name: Publish to Reposilite
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 10.19.0-agp9)'
+        required: true
+        type: string
+      acknowledgement:
+        description: |
+          WARNING: Publishing a version to Reposilite is irrevocable.
+          Do you confirm (Yes/no):
+          1. You have successfully tested publishing a snapshot (with a Gradle CLEAN) just before changing the version
+          2. The version is CORRECT, and is NOT a SNAPSHOT
+          3. You are not drunk or otherwise too tired
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check-acknowledgement:
+    runs-on: [ self-hosted, Android ]
+    steps:
+      - name: Check acknowledgement
+        env:
+          ACKNOWLEDGEMENT: ${{ github.event.inputs.acknowledgement }}
+        run: test "$ACKNOWLEDGEMENT" = "Yes" || (echo "Acknowledgement missing" && exit 1)
+      # Guard against publishing a "release" that's actually a snapshot (e.g. "1.2.3-SNAPSHOT"):
+      # the Reposilite repository selection in mavencentral-publications.gradle would silently
+      # route it to the snapshots repository instead of failing.
+      - name: Validate version format
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$VERSION" == *-SNAPSHOT ]]; then
+            echo "Version '$VERSION' looks like a snapshot version, use the 'Publish to Reposilite Snapshots' workflow instead"
+            exit 1
+          fi
+
+  publish:
+    name: Build and publish
+    needs: check-acknowledgement
+    runs-on: [ self-hosted, Android ]
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4.2.2
+        with:
+          token: ${{ github.token }}
+
+      - name: Set the version (version.txt drives every publishable module's version)
+        run: echo -n "${{ inputs.version }}" > version.txt
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Perform a Gradle clean
+        run: ./gradlew clean
+
+      - name: Publish the release (Realm library, Gradle plugin and their transformers)
+        run: ./gradlew publishRealmJavaToReposilite
+
+      - name: Notify KChat
+        if: ${{ env.KCHAT_WEBHOOK_URL != '' }}
+        env:
+          KCHAT_WEBHOOK_URL: ${{ secrets.KCHAT_WEBHOOK_URL }}
+        run: |
+          TEXT=$(printf ':rocket: *realm-java (AGP 9 fork) %s* is now available on Reposilite!\n:package: Available artifacts:\n```\nio.realm:realm-android-library:%s\nio.realm:realm-android-kotlin-extensions:%s\nio.realm:realm-gradle-plugin:%s\n```\n:link: https://maven.infomaniak.app/#/releases/io/realm' \
+            "${{ inputs.version }}" "${{ inputs.version }}" "${{ inputs.version }}" "${{ inputs.version }}")
+          curl -s -X POST "$KCHAT_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg text "$TEXT" '{text: $text}')"
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx5g -Dfile.encoding=UTF-8"
+  reposiliteUsername: ${{ secrets.REPOSILITE_USERNAME }}
+  reposilitePassword: ${{ secrets.REPOSILITE_PASSWORD }}

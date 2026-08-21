@@ -5,10 +5,11 @@ buildscript {
     repositories {
         mavenLocal()
         google()
-        jcenter()
+        mavenCentral()
+        gradlePluginPortal()
     }
     dependencies {
-        classpath "androidx.benchmark:benchmark-gradle-plugin:1.0.0-rc01"
+        classpath "androidx.benchmark:benchmark-gradle-plugin:1.5.0-rc01"
         classpath "com.android.tools.build:gradle:${properties.get("GRADLE_BUILD_TOOLS")}"
         classpath "io.realm:realm-gradle-plugin:${file("${rootDir}/../version.txt").text.trim()}"
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${properties.get("KOTLIN")}"
@@ -24,23 +25,22 @@ allprojects {
 }
 
 apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
-apply plugin: 'kotlin-kapt'
-apply plugin: 'kotlin-android-extensions'
+apply plugin: 'com.android.legacy-kapt'
 apply plugin: 'realm-android'
 apply plugin: 'androidx.benchmark'
 
 android {
-    compileSdkVersion 28
+    namespace 'io.realm.benchmarks'
+    compileSdk 37
     buildToolsVersion "${project.ext.get("ANDROID_BUILD_TOOLS")}"
 
     defaultConfig {
-        minSdkVersion 16
-        targetSdkVersion 28
+        minSdk 21
+        targetSdk 36
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.benchmark.junit4.AndroidBenchmarkRunner"
-        testInstrumentationRunnerArgument 'androidx.benchmark.suppressErrors', 'EMULATOR,UNLOCKED'
+        testInstrumentationRunnerArguments (['androidx.benchmark.suppressErrors': 'EMULATOR,UNLOCKED'])
     }
 
     buildTypes {
@@ -56,20 +56,23 @@ android {
         targetCompatibility JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = '11'
+    kotlin {
+        compilerOptions {
+            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+        }
     }
 }
 
 repositories {
     mavenLocal()
     google()
-    jcenter()
+    mavenCentral()
 }
 
 dependencies {
-    androidTestImplementation 'androidx.test.ext:junit:1.1.1'
-    androidTestImplementation "androidx.benchmark:benchmark-junit4:1.0.0-rc01"
-    androidTestImplementation 'junit:junit:4.12'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation "androidx.benchmark:benchmark-junit4:1.5.0-rc01"
+    androidTestImplementation 'junit:junit:4.13.2'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 }
+

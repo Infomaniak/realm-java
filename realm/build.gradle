@@ -7,26 +7,25 @@ buildscript {
     repositories {
         mavenLocal()
         google()
-        jcenter()
+        mavenCentral()
         maven { url 'https://jitpack.io' }
         maven { url "https://plugins.gradle.org/m2/" }
     }
 
     dependencies {
         classpath "com.android.tools.build:gradle:${projectDependencies.get('GRADLE_BUILD_TOOLS')}"
+        // Provides com.android.legacy-kapt for the AGP 9 built-in Kotlin migration.
+        classpath "com.android.tools.build:gradle-kotlin:${projectDependencies.get('GRADLE_BUILD_TOOLS')}"
         classpath 'de.undercouch:gradle-download-task:4.0.2'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:2.1'
-        classpath 'com.novoda:gradle-android-command-plugin:1.2.1'
         classpath 'com.github.skhatri:gradle-s3-plugin:1.0.4'
         classpath 'org.kt3k.gradle.plugin:coveralls-gradle-plugin:2.8.2'
-        classpath "org.jfrog.buildinfo:build-info-extractor-gradle:${projectDependencies.get('BUILD_INFO_EXTRACTOR_GRADLE')}"
         classpath "io.realm:realm-transformer:${file('../version.txt').text.trim()}"
         classpath "io.realm:realm-library-build-transformer:${file('../version.txt').text.trim()}"
         classpath 'net.ltgt.gradle:gradle-errorprone-plugin:2.0.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath "org.jetbrains.dokka:dokka-gradle-plugin:${dokka_version}"
         classpath "gradle.plugin.com.github.spotbugs.snom:spotbugs-gradle-plugin:4.5.0"
-        classpath "io.github.gradle-nexus:publish-plugin:${projectDependencies.get("GRADLE_NEXUS_PLUGIN")}"
     }
 }
 
@@ -36,15 +35,18 @@ allprojects {
     projectDependencies.each { key, val ->
         project.ext.set(key, val)
     }
-    project.ext.minSdkVersion = 16
-    project.ext.compileSdkVersion = 30
+    project.ext.minSdkVersion = 21
+    project.ext.compileSdkVersion = 37
+    project.ext.targetSdkVersion = 36
+    project.ext.ndkVersion = projectDependencies.get('ndkVersion')
+    project.ext.cmakeVersion = projectDependencies.get('CMAKE')
     project.ext.buildToolsVersion = projectDependencies.get("ANDROID_BUILD_TOOLS")
     group = 'io.realm'
     version = file("${rootDir}/../version.txt").text.trim()
     repositories {
         mavenLocal()
         google()
-        jcenter()
+        mavenCentral()
     }
 }
 
@@ -56,5 +58,3 @@ if (JavaVersion.current().isJava8Compatible()) {
         }
     }
 }
-
-apply from: "${rootDir}/../mavencentral-publish.gradle"

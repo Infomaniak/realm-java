@@ -3,7 +3,7 @@ buildscript {
     properties.load(new FileInputStream("${projectDir}/dependencies.list"))
 
     repositories {
-        jcenter()
+        mavenCentral()
         maven {
             url "https://plugins.gradle.org/m2/"
         }
@@ -11,21 +11,6 @@ buildscript {
 }
 
 def currentVersion = file("${projectDir}/version.txt").text.trim()
-
-// Find property in either System environment or Gradle properties.
-// If set in both places, Gradle properties win.
-def getPropertyValueOrThrow(String propertyName) {
-    def value = System.getenv(propertyName)
-    if (project.hasProperty(propertyName)) {
-        value = project.getProperty(propertyName)
-    }
-    if (value == null || value.trim().isEmpty()) {
-        throw new GradleException("Could not find '$propertyName'. " +
-                "Most be provided as either environment variable or " +
-                "a Gradle property.")
-    }
-    return value
-}
 
 // Shared configuration that copies relevant properties from the root level and parse them on to
 // child projects.
@@ -37,9 +22,6 @@ def copyProperties = {
     if (project.hasProperty('coreSourcePath')) {
         def absolutePath = file(project.getProperty('coreSourcePath')).absolutePath
         startParameter.projectProperties += [coreSourcePath: absolutePath]
-    }
-    if (project.hasProperty('s3cfg')) {
-        startParameter.projectProperties += [s3cfg: project.getProperty('s3cfg')]
     }
     if (project.hasProperty('enableLTO')) {
         startParameter.projectProperties += [enableLTO: project.getProperty('enableLTO')]
@@ -56,33 +38,41 @@ def copyProperties = {
     if (project.hasProperty('signSecretRingFile')) {
         startParameter.projectProperties += [signSecretRingFile: project.getProperty('signSecretRingFile')]
     }
-    if (project.hasProperty('ossrhUsername')) {
-        startParameter.projectProperties += [ossrhUsername: project.getProperty('ossrhUsername')]
+    if (project.hasProperty('reposiliteUsername')) {
+        startParameter.projectProperties += [reposiliteUsername: project.getProperty('reposiliteUsername')]
     }
-    if (project.hasProperty('ossrhPassword')) {
-        startParameter.projectProperties += [ossrhPassword: project.getProperty('ossrhPassword')]
+    if (project.hasProperty('reposilitePassword')) {
+        startParameter.projectProperties += [reposilitePassword: project.getProperty('reposilitePassword')]
     }
 }
 
 task assembleAnnotations(type:GradleBuild) {
     group = 'Build'
     description = 'Assemble the Realm annotations'
-    buildFile = file('realm-annotations/build.gradle')
+    dir = file('realm-annotations')
     tasks = ['assemble']
 }
 
 task installAnnotations(type:GradleBuild) {
     group = 'Install'
     description = 'Install the jar realm-annotations into mavenLocal()'
-    buildFile = file('realm-annotations/build.gradle')
+    dir = file('realm-annotations')
     tasks = ['publishToMavenLocal']
+}
+
+task publishAnnotationsToReposilite(type:GradleBuild) {
+    group = 'Publish'
+    description = 'Publish the jar realm-annotations to the Infomaniak Reposilite repository'
+    dir = file('realm-annotations')
+    tasks = ['publishAllPublicationsToReposiliteRepository']
+    configure copyProperties
 }
 
 task assembleTransformer(type:GradleBuild) {
     group = 'Build'
     description = 'Assemble the Realm transformer'
     dependsOn installAnnotations
-    buildFile = file('realm-transformer/build.gradle')
+    dir = file('realm-transformer')
     tasks = ['assemble']
 }
 
@@ -90,15 +80,32 @@ task installTransformer(type:GradleBuild) {
     group = 'Install'
     description = 'Install the jar realm-transformer into mavenLocal()'
     dependsOn installAnnotations
-    buildFile = file('realm-transformer/build.gradle')
+    dir = file('realm-transformer')
     tasks = ['publishToMavenLocal']
+}
+
+task publishTransformerToReposilite(type:GradleBuild) {
+    group = 'Publish'
+    description = 'Publish the jar realm-transformer to the Infomaniak Reposilite repository'
+    dependsOn publishAnnotationsToReposilite
+    dir = file('realm-transformer')
+    tasks = ['publishAllPublicationsToReposiliteRepository']
+    configure copyProperties
 }
 
 task installBuildTransformer(type:GradleBuild) {
     group = 'Install'
     description = 'Install the jar realm-library-build-transformer into mavenLocal()'
-    buildFile = file('library-build-transformer/build.gradle')
+    dir = file('library-build-transformer')
     tasks = ['publishToMavenLocal']
+}
+
+task publishBuildTransformerToReposilite(type:GradleBuild) {
+    group = 'Publish'
+    description = 'Publish the jar realm-library-build-transformer to the Infomaniak Reposilite repository'
+    dir = file('library-build-transformer')
+    tasks = ['publishAllPublicationsToReposiliteRepository']
+    configure copyProperties
 }
 
 task assembleRealm(type:GradleBuild) {
@@ -107,7 +114,7 @@ task assembleRealm(type:GradleBuild) {
     dependsOn installAnnotations
     dependsOn installTransformer
     dependsOn installBuildTransformer
-    buildFile = file('realm/build.gradle')
+    dir = file('realm')
     tasks = ['assemble', 'javadocJar', 'sourcesJar']
     configure copyProperties
 }
@@ -115,7 +122,7 @@ task assembleRealm(type:GradleBuild) {
 task checkExamples(type:GradleBuild) {
     group = 'Test'
     description = 'Run the JVM tests and checks the examples'
-    buildFile = file('examples/build.gradle')
+    dir = file('examples')
     tasks = ['check']
     configure copyProperties
 }
@@ -123,23 +130,22 @@ task checkExamples(type:GradleBuild) {
 task checkRealm(type:GradleBuild) {
     group = 'Test'
     description = 'Run the JVM tests and checks Realm project'
-    buildFile = file('realm/build.gradle')
+    dir = file('realm')
     tasks = ['check']
     configure copyProperties
 }
 
 task check {
     group = 'Test'
-    description = 'Run the JVM tests and checks in the realm and examples projects'
+    description = 'Run the JVM tests and checks in the supported Realm project'
     dependsOn checkRealm
-    dependsOn checkExamples
 }
 
 task assembleUnitTests(type:GradleBuild) {
     group = 'Build'
     description = 'Assemble Android unit tests of the Realm project'
     dependsOn installTransformer
-    buildFile = file('realm/build.gradle')
+    dir = file('realm')
     tasks = ['assembleAndroidTest']
     configure copyProperties
 }
@@ -148,7 +154,7 @@ task connectedUnitTests(type:GradleBuild) {
     group = 'Test'
     description = 'Run the Android unit tests of the Realm project'
     dependsOn installTransformer
-    buildFile = file('realm/build.gradle')
+    dir = file('realm')
     tasks = ['connectedAndroidTest']
     configure copyProperties
 }
@@ -157,7 +163,7 @@ task assembleBenchmarks(type:GradleBuild) {
     group = 'Build'
     description = 'Assemble benchmark tests for the library '
     dependsOn installTransformer
-    buildFile = file('library-benchmarks/build.gradle')
+    dir = file('library-benchmarks')
     tasks = ['assembleAndroidTest']
     configure copyProperties
 }
@@ -166,7 +172,7 @@ task connectedBenchmarks(type:GradleBuild) {
     group = 'Test'
     description = 'Run all the benchmark tests for the library '
     dependsOn installTransformer
-    buildFile = file('library-benchmarks/build.gradle')
+    dir = file('library-benchmarks')
     tasks = ['connectedAndroidTest']
     configure copyProperties
 }
@@ -176,8 +182,18 @@ task installRealm(type:GradleBuild) {
     description = 'Install the artifacts of Realm libraries into mavenLocal()'
     dependsOn installTransformer
     dependsOn installBuildTransformer
-    buildFile = file('realm/build.gradle')
+    dir = file('realm')
     tasks = ['publishToMavenLocal']
+    configure copyProperties
+}
+
+task publishRealmToReposilite(type:GradleBuild) {
+    group = 'Publish'
+    description = 'Publish the artifacts of Realm libraries to the Infomaniak Reposilite repository'
+    dependsOn publishTransformerToReposilite
+    dependsOn publishBuildTransformerToReposilite
+    dir = file('realm')
+    tasks = ['publishAllPublicationsToReposiliteRepository']
     configure copyProperties
 }
 
@@ -186,7 +202,7 @@ task assembleGradlePlugin(type:GradleBuild) {
     description = 'Assemble the Realm Gradle plugin'
     dependsOn installRealm
     dependsOn installTransformer
-    buildFile = file('gradle-plugin/build.gradle')
+    dir = file('gradle-plugin')
     tasks = ['assemble']
 }
 
@@ -195,8 +211,18 @@ task installGradlePlugin(type:GradleBuild) {
     group = 'Install'
     dependsOn installRealm
     dependsOn installTransformer
-    buildFile = file('gradle-plugin/build.gradle')
+    dir = file('gradle-plugin')
     tasks = ['publishToMavenLocal']
+}
+
+task publishGradlePluginToReposilite(type:GradleBuild) {
+    description = 'Publish the Realm Gradle plugin to the Infomaniak Reposilite repository'
+    group = 'Publish'
+    dependsOn publishRealmToReposilite
+    dependsOn publishTransformerToReposilite
+    dir = file('gradle-plugin')
+    tasks = ['publishAllPublicationsToReposiliteRepository']
+    configure copyProperties
 }
 
 task installRealmJava(type:Task) {
@@ -206,12 +232,19 @@ task installRealmJava(type:Task) {
     description = 'Install the Realm library and Gradle plugin into mavenLocal()'
 }
 
+task publishRealmJavaToReposilite(type:Task) {
+    dependsOn publishGradlePluginToReposilite
+    dependsOn publishRealmToReposilite
+    group = 'Publish'
+    description = 'Publish the Realm library and Gradle plugin to the Infomaniak Reposilite repository'
+}
+
 task assembleExamples(type:GradleBuild) {
     dependsOn installGradlePlugin
     dependsOn installRealm
     group = 'Build'
     description = 'Assemble the Realm examples'
-    buildFile = file('examples/build.gradle')
+    dir = file('examples')
     tasks = ['assemble']
 }
 
@@ -220,66 +253,39 @@ task monkeyExamples(type:GradleBuild) {
     dependsOn installRealm
     group = 'Build'
     description = 'Run the monkey tests on the Realm examples'
-    buildFile = file('examples/build.gradle')
+    dir = file('examples')
     tasks = ['monkeyRelease']
 }
 
 task javadoc(type:GradleBuild) {
     description = 'Generate the Javadoc Jar for the Realm project'
     group = 'Docs'
-    buildFile = file('realm/build.gradle')
+    dir = file('realm')
     tasks = ['javadocJar']
     configure copyProperties
-}
-
-task uploadJavadoc {
-    group = 'Release'
-    description = 'Upload Java and Kotlin docs to S3'
-    dependsOn javadoc
-
-    doLast {
-        def awsAccessKey = getPropertyValueOrThrow("SDK_DOCS_AWS_ACCESS_KEY")
-        def awsSecretKey = getPropertyValueOrThrow("SDK_DOCS_AWS_SECRET_KEY")
-
-        // Upload two copies, to 'latest' and a versioned folder for posterity.
-        // Symlinks would have been safer and faster, but this is not supported by S3.
-        [ "${currentVersion}", "latest"].forEach { version ->
-            exec {
-                commandLine 's3cmd', 'put', '--recursive', '--acl-public', "--access_key=${awsAccessKey}", "--secret_key=${awsSecretKey}", 'realm/realm-library/build/docs/javadoc/', "s3://realm-sdks/realm-sdks/java/${version}/"
-            }
-            // The stylesheet is being uploaded with the wrong Content-Type header, which causes the stylesheet to not be applied in some browsers.
-            // So we need to modify the stylesheet after it has been uploaded.
-            exec {
-                commandLine 's3cmd', 'modify', "--access_key=${awsAccessKey}", "--secret_key=${awsSecretKey}", "--debug", '--add-header=Content-Type: text/css', "s3://realm-sdks/realm-sdks/java/${version}/stylesheet.css"
-            }
-            // Upload Kotlin extension docs to a subdirectory of the Javadoc. This should not conflict with the Javadoc folder layout.
-            exec {
-                commandLine 's3cmd', 'put', '--recursive', '--acl-public', "--access_key=${awsAccessKey}", "--secret_key=${awsSecretKey}", 'realm/kotlin-extensions/build/dokka/', "s3://realm-sdks/realm-sdks/java/${version}/kotlin-extensions/"
-            }
-        }
-    }
 }
 
 task sourcesJar(type:GradleBuild) {
     description = 'Generate the sources Jar for the Realm project'
     group = 'Docs'
-    buildFile = file('realm/build.gradle')
+    dir = file('realm')
     tasks = ['sourcesJar']
     configure copyProperties
 }
 
 task assemble {
     group 'Build'
-    description = 'Build Realm, the Gradle plugin and the examples'
-    dependsOn assembleExamples
+    description = 'Build the supported Realm libraries and Gradle plugin'
+    dependsOn assembleRealm
+    dependsOn assembleGradlePlugin
 }
 
 task distributionJniUnstrippedPackage(type:Zip) {
     description = 'Generate native libs package with debug symbols'
 
     group = 'Artifact'
-    archiveName = "realm-java-jni-libs-unstripped-${currentVersion}.zip"
-    destinationDir = file("${buildDir}/outputs/distribution")
+    archiveFileName = "realm-java-jni-libs-unstripped-${currentVersion}.zip"
+    destinationDirectory = file("${buildDir}/outputs/distribution")
 
     from("realm/realm-library/build/outputs/jniLibs-unstripped") {
         include '**/*.so'
@@ -289,7 +295,13 @@ task distributionJniUnstrippedPackage(type:Zip) {
 task cleanRealm(type:GradleBuild) {
     description = 'Clean the Realm project'
     group = 'Clean'
-    buildFile = file('realm/build.gradle')
+    // Needed because realm/build.gradle's buildscript classpath references
+    // io.realm:realm-transformer and io.realm:realm-library-build-transformer from
+    // mavenLocal(); without them already installed, even configuring this GradleBuild
+    // (and thus `clean`) fails on a fresh checkout / after cleanLocalMavenRepos ran.
+    dependsOn installTransformer
+    dependsOn installBuildTransformer
+    dir = file('realm')
     tasks = ['clean']
     configure copyProperties
 }
@@ -297,14 +309,17 @@ task cleanRealm(type:GradleBuild) {
 task cleanGradlePlugin(type:GradleBuild) {
     description = 'Clean the Realm Gradle plugin project'
     group = 'Clean'
-    buildFile = file('gradle-plugin/build.gradle')
+    // Needed because gradle-plugin/build.gradle depends on io.realm:realm-transformer
+    // from mavenLocal(); without it already installed, configuring this project fails.
+    dependsOn installTransformer
+    dir = file('gradle-plugin')
     tasks = ['clean']
 }
 
 task cleanExamples(type:GradleBuild) {
     description = 'Clean the Realm examples'
     group = 'Clean'
-    buildFile = file('examples/build.gradle')
+    dir = file('examples')
     tasks = ['clean']
 }
 
@@ -319,7 +334,10 @@ task clean {
     group = 'Clean'
     cleanLocalMavenRepos.dependsOn cleanRealm
     cleanLocalMavenRepos.dependsOn cleanGradlePlugin
-    cleanLocalMavenRepos.dependsOn cleanExamples
+    // Note: cleanExamples is intentionally excluded. The `examples/` module is a legacy
+    // sample project not migrated to AGP9 (uses jcenter(), missing namespace declarations,
+    // deprecated Kotlin plugins, etc.) and is unrelated to the published artifacts.
+    // Run `cleanExamples` manually if needed once/if that module is migrated.
     dependsOn cleanLocalMavenRepos
 }
 
@@ -352,84 +370,4 @@ task manualClean {
             commandLine 'sh', '-c', "echo \"${System.env.HOME}/.m2/repository/io/realm\" && rm -rf \"${System.env.HOME}/.m2/repository/io/realm\""
         }
     }
-}
-
-task uploadDistributionPackage {
-    group = 'Release'
-    description = 'Upload the distribution package to S3'
-    dependsOn distributionJniUnstrippedPackage
-    def s3AccessKey = "${ -> getPropertyValueOrThrow('REALM_S3_ACCESS_KEY')}"
-    def s3SecretKey = "${ -> getPropertyValueOrThrow('REALM_S3_SECRET_KEY')}"
-    doLast {
-
-        // Check that zip file exists. Creating the zip file will silently fail if no files exists, so check here.
-        def zipFile = file("${buildDir}/outputs/distribution/realm-java-jni-libs-unstripped-${currentVersion}.zip")
-        if (!zipFile.exists()) {
-            throw new GradleException("Could not locate unstripped binary zip file in: ${zipFile.getPath()}")
-        }
-
-        exec {
-            commandLine 's3cmd', "--access_key=${s3AccessKey}", "--secret_key=${s3SecretKey}", 'put', zipFile.getAbsolutePath(), 's3://static.realm.io/downloads/java/'
-        }
-    }
-}
-
-task uploadUpdateVersion(type: Exec) {
-    group = 'Release'
-    description = 'Update the file on S3 containing the latest version'
-    def s3AccessKey = "${ -> getPropertyValueOrThrow('REALM_S3_ACCESS_KEY')}"
-    def s3SecretKey = "${ -> getPropertyValueOrThrow('REALM_S3_SECRET_KEY')}"
-    commandLine 's3cmd', "--access_key=${s3AccessKey}", "--secret_key=${s3SecretKey}", 'put', "${rootDir}/version.txt", 's3://static.realm.io/update/java'
-}
-
-task distribute {
-    group = 'Release'
-    description = 'Distribute release artifacts to S3'
-    dependsOn uploadDistributionPackage
-    dependsOn uploadUpdateVersion
-}
-
-task mavenCentralRealm(type: GradleBuild) {
-    description = 'Publish the Realm AAR and AP to Maven Central'
-    group = 'Publishing'
-    buildFile = file('realm/build.gradle')
-    tasks = ['publishToSonatype']
-    startParameter.projectProperties = gradle.startParameter.projectProperties
-    configure copyProperties
-}
-
-task mavenCentralAnnotations(type: GradleBuild) {
-    description = 'Publish the Realm Annotations to Maven Central'
-    group = 'Publishing'
-    buildFile = file('realm-annotations/build.gradle')
-    tasks = ['publishToSonatype']
-    startParameter.projectProperties = gradle.startParameter.projectProperties
-    configure copyProperties
-}
-
-task mavenCentralGradlePlugin(type: GradleBuild) {
-    description = 'Publish the Realm Gradle Plugin to Maven Central'
-    group = 'Publishing'
-    buildFile = file('gradle-plugin/build.gradle')
-    tasks = ['publishToSonatype']
-    startParameter.projectProperties = gradle.startParameter.projectProperties
-    configure copyProperties
-}
-
-task mavenCentralTransformer(type: GradleBuild) {
-    description = 'Publish the Realm Transformer to Maven Central'
-    group = 'Publishing'
-    buildFile = file('realm-transformer/build.gradle')
-    tasks = ['publishToSonatype']
-    startParameter.projectProperties = gradle.startParameter.projectProperties
-    configure copyProperties
-}
-
-task mavenCentralUpload {
-    description = 'Publish all the Realm artifacts to Maven Central'
-    group = 'Publishing'
-    dependsOn mavenCentralRealm
-    dependsOn mavenCentralAnnotations
-    dependsOn mavenCentralGradlePlugin
-    dependsOn mavenCentralTransformer
 }
