@@ -63,8 +63,12 @@ task installAnnotations(type:GradleBuild) {
 task publishAnnotationsToReposilite(type:GradleBuild) {
     group = 'Publish'
     description = 'Publish the jar realm-annotations to the Infomaniak Reposilite repository'
+    // realm-transformer/build.gradle resolves io.realm:realm-annotations from mavenLocal(),
+    // so it must be installed locally too, not just published to the remote repository.
+    // Both goals are run within a single nested build to avoid registering the same
+    // subproject directory as an included build twice in one Gradle invocation.
     dir = file('realm-annotations')
-    tasks = ['publishAllPublicationsToReposiliteRepository']
+    tasks = ['publishToMavenLocal', 'publishAllPublicationsToReposiliteRepository']
     configure copyProperties
 }
 
@@ -87,9 +91,14 @@ task installTransformer(type:GradleBuild) {
 task publishTransformerToReposilite(type:GradleBuild) {
     group = 'Publish'
     description = 'Publish the jar realm-transformer to the Infomaniak Reposilite repository'
+    // gradle-plugin/build.gradle and realm/build.gradle resolve io.realm:realm-transformer
+    // from mavenLocal(), so it must be installed locally too, not just published to the
+    // remote repository. Both goals are run within a single nested build to avoid
+    // registering the same subproject directory as an included build twice in one
+    // Gradle invocation.
     dependsOn publishAnnotationsToReposilite
     dir = file('realm-transformer')
-    tasks = ['publishAllPublicationsToReposiliteRepository']
+    tasks = ['publishToMavenLocal', 'publishAllPublicationsToReposiliteRepository']
     configure copyProperties
 }
 
@@ -103,8 +112,13 @@ task installBuildTransformer(type:GradleBuild) {
 task publishBuildTransformerToReposilite(type:GradleBuild) {
     group = 'Publish'
     description = 'Publish the jar realm-library-build-transformer to the Infomaniak Reposilite repository'
+    // realm/build.gradle's buildscript classpath resolves io.realm:realm-library-build-transformer
+    // from mavenLocal(), so it must be installed locally too, not just published to the
+    // remote repository. Both goals are run within a single nested build to avoid
+    // registering the same subproject directory as an included build twice in one
+    // Gradle invocation.
     dir = file('library-build-transformer')
-    tasks = ['publishAllPublicationsToReposiliteRepository']
+    tasks = ['publishToMavenLocal', 'publishAllPublicationsToReposiliteRepository']
     configure copyProperties
 }
 
@@ -190,6 +204,13 @@ task installRealm(type:GradleBuild) {
 task publishRealmToReposilite(type:GradleBuild) {
     group = 'Publish'
     description = 'Publish the artifacts of Realm libraries to the Infomaniak Reposilite repository'
+    // realm/build.gradle's buildscript classpath resolves io.realm:realm-transformer and
+    // io.realm:realm-library-build-transformer from mavenLocal() (see cleanRealm above).
+    // publishTransformerToReposilite/publishBuildTransformerToReposilite already install
+    // them locally as part of their own nested build (see their definitions above), so we
+    // must not also depend on installTransformer/installBuildTransformer here: that would
+    // invoke their subproject directories as a second, separate nested build within the
+    // same Gradle session, which fails with an "already included" build error.
     dependsOn publishTransformerToReposilite
     dependsOn publishBuildTransformerToReposilite
     dir = file('realm')
@@ -218,6 +239,11 @@ task installGradlePlugin(type:GradleBuild) {
 task publishGradlePluginToReposilite(type:GradleBuild) {
     description = 'Publish the Realm Gradle plugin to the Infomaniak Reposilite repository'
     group = 'Publish'
+    // gradle-plugin/build.gradle resolves io.realm:realm-transformer from mavenLocal().
+    // publishTransformerToReposilite already installs it locally as part of its own nested
+    // build, so we must not also depend on installTransformer/installRealm here: that would
+    // invoke their subproject directories as a second, separate nested build within the
+    // same Gradle session, which fails with an "already included" build error.
     dependsOn publishRealmToReposilite
     dependsOn publishTransformerToReposilite
     dir = file('gradle-plugin')
