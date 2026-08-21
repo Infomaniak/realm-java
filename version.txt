@@ -1,1 +1,1 @@
-10.19.0-agp9-infomaniak
+11.0.0-agp9-infomaniak
