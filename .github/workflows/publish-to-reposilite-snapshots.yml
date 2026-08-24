@@ -43,6 +43,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Install the required CMake version (from dependencies.list)
+        run: |
+          CMAKE_VERSION=$(grep '^CMAKE=' dependencies.list | cut -d= -f2)
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;$CMAKE_VERSION"
+
       - name: Perform a Gradle clean, as requested
         if: ${{ github.event.inputs.perform-a-gradle-clean == 'true' }}
         run: ./gradlew clean
