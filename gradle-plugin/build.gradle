@@ -100,12 +100,16 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
 
 apply from: "${rootDir}/../mavencentral-publications.gradle"
 
+// The 'java-gradle-plugin' plugin already creates a 'pluginMaven' publication (from
+// components.java) when 'maven-publish' is applied. Reuse it instead of declaring a second
+// 'realm' publication with the same io.realm:realm-gradle-plugin coordinates: publishing both
+// to the same repository causes Gradle to fail with "Multiple publications with coordinates
+// ... will overwrite each other!" / a 409 Conflict from Reposilite.
 publishing {
     publications {
-        realm(MavenPublication) {
+        pluginMaven(MavenPublication) {
             groupId 'io.realm'
             artifactId = 'realm-gradle-plugin'
-            from components.java
             populatePom(
                     it,
                     'realm-gradle-plugin',
